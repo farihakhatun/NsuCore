@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "skills": {
+    "blocks-idp": {
+      "source": "SELISEdigitalplatforms/blocks-skills",
+      "sourceType": "github",
+      "skillPath": "skills/blocks-idp/SKILL.md",
+      "computedHash": "617ae243d8074cc35625015129c390b9038041ca072b49ead3057ae94018d841"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "516bd2154eb843a8240e43d5b285229129853114ad7075a5e141e1c08e408c84"
+    }
+  }
+}
