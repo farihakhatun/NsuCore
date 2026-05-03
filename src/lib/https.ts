@@ -32,12 +32,11 @@ export class HttpError extends Error {
 
 const projectKey = import.meta.env.VITE_X_BLOCKS_KEY ?? '';
 const localHostChecker = isLocalhost();
+const API_BASE = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? 'https://api.seliseblocks.com';
 
-// Use empty BASE_URL on localhost so Vite proxy handles CORS
-// Use full URL in production
-const BASE_URL = localHostChecker
-  ? ''
-  : (import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '');
+// On localhost: use relative URLs so Vite proxy handles CORS
+// In production: use full API URL
+const BASE_URL = localHostChecker ? '' : API_BASE;
 
 export const clients: Https = {
   async get<T>(url: string, headers: HeadersInit = {}): Promise<T> {
@@ -58,7 +57,6 @@ export const clients: Https = {
 
   async request<T>(url: string, { method, headers = {}, body }: RequestOptions): Promise<T> {
     const fullUrl = url.startsWith('http') ? url : `${BASE_URL}/${url.replace(/^\//, '')}`;
-
     const requestHeaders = this.createHeaders(headers);
 
     const config: RequestInit = {
@@ -84,71 +82,38 @@ export const clients: Https = {
 
       if (response.status === 401) {
         let err;
-        try {
-          err = await response.json();
-        } catch {
-          err = { error: response.statusText || 'Unauthorized' };
-        }
-
-        if (err.error_description) {
-          throw new HttpError(response.status, err);
-        }
-
+        try { err = await response.json(); }
+        catch { err = { error: response.statusText || 'Unauthorized' }; }
+        if (err.error_description) throw new HttpError(response.status, err);
         return this.handleAuthError<T>(url, method, headers, body);
       }
 
       let err;
-      try {
-        err = await response.json();
-      } catch {
-        err = { error: response.statusText || 'Request failed' };
-      }
+      try { err = await response.json(); }
+      catch { err = { error: response.statusText || 'Request failed' }; }
       throw new HttpError(response.status, err);
     } catch (error) {
-      if (error instanceof HttpError) {
-        throw error;
-      }
+      if (error instanceof HttpError) throw error;
       throw new HttpError(500, { error: 'Network error' });
     }
   },
 
   createHeaders(headers: any): Headers {
     const authToken = useAuthStore.getState().accessToken;
-
     const baseHeaders = {
       'Content-Type': 'application/json',
       'x-blocks-key': projectKey,
       ...(authToken && { Authorization: `bearer ${authToken}` }),
     };
-
-    const headerEntries =
-      headers instanceof Headers ? Object.fromEntries(headers.entries()) : headers;
-
-    const newHeader = new Headers({
-      ...baseHeaders,
-      ...headerEntries,
-    });
-    return newHeader;
+    const headerEntries = headers instanceof Headers ? Object.fromEntries(headers.entries()) : headers;
+    return new Headers({ ...baseHeaders, ...headerEntries });
   },
 
-  async handleAuthError<T>(
-    url: string,
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    headers: any,
-    body: any
-  ): Promise<T> {
+  async handleAuthError<T>(url: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', headers: any, body: any): Promise<T> {
     const authStore = useAuthStore.getState();
-
-    if (!authStore.refreshToken) {
-      throw new HttpError(401, { error: 'invalid_request' });
-    }
-
+    if (!authStore.refreshToken) throw new HttpError(401, { error: 'invalid_request' });
     const refreshTokenRes = await getRefreshToken();
-
-    if (refreshTokenRes.error === 'invalid_request') {
-      throw new HttpError(401, refreshTokenRes);
-    }
-
+    if (refreshTokenRes.error === 'invalid_request') throw new HttpError(401, refreshTokenRes);
     authStore.setAccessToken(refreshTokenRes.access_token);
     return this.request<T>(url, { method, headers, body });
   },
